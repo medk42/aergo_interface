@@ -1,0 +1,16 @@
+{
+    "name": "CBun Dev Image: FireFly5",
+    "image": "registry.gitlab.com/kassowrobots-sdk/cbun-sdk/firefly:5",
+    "runArgs": [
+        "--network=host"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-azuretools.vscode-docker",
+                "ms-vscode.cpptools-extension-pack"
+            ]
+        }
+    }      
+}
+

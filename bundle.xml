@@ -1,0 +1,26 @@
+<?document type="cbunxml" version="1.0" ?>
+<bundle name="cbun_aergo_adapter" version="2.0.0" path="libaergo_adapter">
+    <label>Aergo Adapter</label>
+    <author>Jakub Medek</author>
+    <description>CBun for connecting to the Aergo AR robot programming project.</description>
+    <class name="aergo::AergoConnector"
+        base="kr2_bundle_api::CustomDevice"
+        instance_prefix="AERGO" >
+        <label>Aergo Connector</label>
+        <description>Provides support for connecting to the Aergo AR robot programming project. Creates a server running on the robot for remote control from the Aergo project via a Kassow robot plugin.</description>
+        <include>aergo/aergo_adapter.h</include>
+        <config>
+            <param name="server_port" type="int">
+                <label>Server Port</label>
+                <default>4242</default>
+            </param>
+        </config>
+        <method name="testMovement" xmlrpc="false">
+            <label>Test Movement</label>
+            <description>Test movement method.</description>
+            <param name="target" type="const RobotPose">
+                <label>Target</label>
+            </param>
+        </method>
+    </class>
+</bundle>

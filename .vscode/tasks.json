@@ -1,0 +1,75 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "CBun: Build",
+        "type": "shell",
+        "command": "/usr/bin/cmake",
+        "args": [
+            "--build",
+            "build",
+            "--",
+            "-j",
+            "20"
+        ],
+        "options": {
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "TERM": "xterm-256color",
+                "CMAKE_COLOR_DIAGNOSTICS": "1"
+            }
+        },
+        "group": "build",
+        "problemMatcher": [],
+        "detail": "Builds the CBun.",
+        "dependsOrder": "sequence",
+        "dependsOn": "CMake: configure",
+        "presentation": {
+          "reveal": "always",
+          "panel": "shared",
+          "clear": true
+        }
+      },
+      {
+        "label": "CBun: Clean Build",
+        "type": "shell",
+        "command": "/usr/bin/cmake",
+        "args": [
+            "--build",
+            "build",
+            "--",
+            "-j",
+            "20"
+        ],
+        "options": {
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "TERM": "xterm-256color",
+                "CMAKE_COLOR_DIAGNOSTICS": "1"
+            }
+        },
+        "group": "build",
+        "problemMatcher": [],
+        "detail": "Builds the CBun.",
+        "dependsOrder": "sequence",
+        "dependsOn": ["CMake: clean", "CMake: configure"],
+        "presentation": {
+          "reveal": "always",
+          "panel": "shared",
+          "clear": true
+        }
+      },
+      {
+        "label": "CBun: Deploy",
+        "type": "shell",
+        "command": "sh deploy.sh",
+        "presentation": {
+          "reveal": "always"
+        },
+        "group": "build",
+        "problemMatcher": [],
+        "dependsOn": "CBun: Build & Install",
+        "dependsOrder": "sequence"
+      }
+    ]
+}
