@@ -1,5 +1,5 @@
 <?document type="cbunxml" version="1.0" ?>
-<bundle name="cbun_aergo_adapter" version="2.0.0" path="libaergo_adapter">
+<bundle name="cbun_aergo_adapter" version="0.1.0" path="libaergo_adapter">
     <label>Aergo Adapter</label>
     <author>Jakub Medek</author>
     <description>CBun for connecting to the Aergo AR robot programming project.</description>
