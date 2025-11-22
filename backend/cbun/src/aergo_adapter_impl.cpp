@@ -2,7 +2,7 @@
 #include "aergo/logging.h"
 
 #include <kr2_program_api/api_v1/bundles/arg_provider_xml.h>
-#include <kr2_rc_api/api_v1/types.h>
+#include <kr2_rc_api/api_v2/trajectory_moves.h>
 
 using namespace aergo;
 
@@ -77,19 +77,28 @@ CBUN_PCALL AergoConnector::Impl::onDeactivate()
 
 CBUN_PCALL AergoConnector::Impl::testMovement(const kr2_program_api::RobotPose &target)
 {
-    kr2rc_api::Pose target_pose { 
-        .frame_ = target.toFrame(), 
-        .ref_frame_id_ = kr2rc_api::Model::SysId::FRAME_WORLD 
+    double r, p, y;
+    target.rot().getRPY(r, p, y);
+    const auto& pos = target.pos();
+
+    kr2rc_api2::Pose target_pose { 
+        .frame_ = {
+            .M_ = kr2rc_api2::Rotation::RPY(r, p, y),
+            .p_ = kr2rc_api2::Vector(pos.x().d(), pos.y().d(), pos.z().d())
+        },
+        .ref_frame_id_ = 0 
     };
 
-    kr2rc_api::Trajectory::CmdTrajectoryParams ws_tp;
-    ws_tp.tracking_type_ = kr2rc_api::Trajectory::CmdTrajectoryParams::TT_WS_TARGET_SPEED;
-    ws_tp.tracking_value_ = 0.1;
-    ws_tp.blend_type_ = kr2rc_api::Trajectory::CmdTrajectoryParams::BT_WS_ACCELERATION;
-    ws_tp.blend_value_ = 1;
+    auto request = kr2rc_api2::Move::workSpaceBlend()
+        .toTarget(target_pose)
+        .withTargetType(kr2rc_api2::Move::TargetType::eStopPoint)
+        .withTargetSpeed(0.400)
+        .withBlendMaxAcceleration(8.000)
+        .withSynchronization(kr2rc_api2::Move::SYNC);
+
 
     LOG_INFO("Starting movement to target pose...");
-    base_->api_->rc_api_->arm_trajectory_->cmd_Follow(target_pose, &ws_tp);
+    request.follow();
     LOG_INFO("Movement finished.");
 
 
