@@ -1,10 +1,13 @@
 cmake_minimum_required(VERSION 3.10)
 project(aergo_adapter)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+
+# Add libraries
+add_subdirectory(lib)
 
 # Set path for linking with system dependencies
 link_directories(/usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib $ENV{KR2_INSTALL_FOLDER}/lib)
@@ -19,7 +22,7 @@ file(GLOB_RECURSE PROJECT_SOURCES
 set(KR2_API_LIBS kr2rc_api kr2_io_api kr2_program_api)
 add_library(${PROJECT_NAME} SHARED ${PROJECT_SOURCES})
 include_directories(${PROJECT_NAME} PRIVATE cbun/include $ENV{KR2_INSTALL_FOLDER}/include)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${KR2_API_LIBS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${KR2_API_LIBS} helpers___robot_interface kassow_rpc)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
     CXX_VISIBILITY_PRESET hidden

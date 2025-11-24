@@ -1,9 +1,18 @@
 #pragma once
 
 #include "aergo/aergo_adapter.h"
+#include "robot_module_kassow/rpc/rpc_transport.h"
+
+#include <memory>
 
 namespace aergo
 {
+    class CbunLogger : public aergo::robot::kassow::rpc::RpcLogger
+    {
+    public:
+        virtual void log(aergo::robot::kassow::rpc::RpcLogType type, const char* message) const noexcept override;
+    };
+
     class AergoConnector::Impl {
     public:
         
@@ -31,8 +40,11 @@ namespace aergo
 
         AergoConnector* base_;
 
+        CbunLogger cbun_logger_;
+        std::unique_ptr<aergo::robot::kassow::rpc::RpcServer> rpc_server_;
+
         struct {
-            int server_port;
+            u_int16_t server_port;
         } activation_parameters_;
     };
 }

@@ -12,7 +12,7 @@
         <config>
             <param name="server_port" type="int">
                 <label>Server Port</label>
-                <default>4242</default>
+                <default>15050</default>
             </param>
         </config>
         <method name="testMovement" xmlrpc="false">

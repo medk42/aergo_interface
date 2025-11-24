@@ -7,6 +7,23 @@
 using namespace aergo;
 
 
+void CbunLogger::log(aergo::robot::kassow::rpc::RpcLogType type, const char* message) const noexcept
+{
+    switch (type)
+    {
+        case aergo::robot::kassow::rpc::RpcLogType::INFO:
+            LOG_INFO("[RPC] " << message);
+            break;
+        case aergo::robot::kassow::rpc::RpcLogType::WARNING:
+            LOG_WARN("[RPC] " << message);
+            break;
+        case aergo::robot::kassow::rpc::RpcLogType::ERROR:
+            LOG_ERR("[RPC] " << message);
+            break;
+    }
+}
+
+
 int AergoConnector::Impl::onCreate()
 {
 
@@ -43,7 +60,27 @@ CBUN_PCALL AergoConnector::Impl::onActivate(const boost::property_tree::ptree &p
         CBUN_PCALL_RET_ERROR(-1, "Invalid activation parameters.");
     }
 
-    // No specific activation parameters for now
+    rpc_server_ = std::make_unique<aergo::robot::kassow::rpc::RpcServer>(&cbun_logger_);
+    // TODO setup callbacks and background thread
+    if (!rpc_server_->start(activation_parameters_.server_port))
+    {
+        rpc_server_.reset();
+        LOG_ERR("Failed to start RPC server on port " << activation_parameters_.server_port);
+        CBUN_PCALL_RET_ERROR(-2, "Failed to start RPC server.");
+    }
+
+    CBUN_PCALL_RET_OK
+}
+
+
+CBUN_PCALL AergoConnector::Impl::onDeactivate()
+{
+    if (rpc_server_)
+    {
+        rpc_server_->stop();
+    }
+    rpc_server_.reset();
+
     CBUN_PCALL_RET_OK
 }
 
@@ -58,20 +95,15 @@ bool AergoConnector::Impl::processActivationParams(const boost::property_tree::p
         return false;
     }
 
-    activation_parameters_.server_port = arg_provider.getInt(0);
-    if (activation_parameters_.server_port < 1000 || activation_parameters_.server_port > 65535)
+    int port = arg_provider.getInt(0);
+    if (port < 1 || port > 65535)
     {
-        LOG_ERR("Invalid server port: " << activation_parameters_.server_port << ", must be between 1000 and 65535");
+        LOG_ERR("Invalid server port: " << port << ", must be between 1 and 65535");
         return false;
     }
+    activation_parameters_.server_port = static_cast<u_int16_t>(port);
 
     return true;
-}
-
-
-CBUN_PCALL AergoConnector::Impl::onDeactivate()
-{
-    CBUN_PCALL_RET_OK
 }
 
 
