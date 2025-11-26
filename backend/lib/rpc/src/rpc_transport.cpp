@@ -849,7 +849,8 @@ namespace aergo::robot::kassow::rpc
             return false;
         }
 
-        if (!client_.waitForData(timeout, logger_))
+        // check if data is available, if not return immediately
+        if (!client_.waitForData(std::chrono::milliseconds(0), logger_))
         {
             return false;
         }

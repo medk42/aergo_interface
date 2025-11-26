@@ -47,9 +47,9 @@ namespace aergo::module::helpers::robot_interface::robot_control
                 GetRobotSpecs  = 4,
             };
 
-            uint64_t MAX_SUPPORTED_JOINTS = 16; // maximum joints supported in move joint request, throws if exceeded
-            uint64_t MAX_SUPPORTED_POSES = 32768; // maximum poses supported in move trajectory request, throws if exceeded
-            uint64_t MAX_ERROR_MESSAGE_LENGTH = 4096; // maximum error message length, clipped if exceeded
+            constexpr uint64_t MAX_SUPPORTED_JOINTS = 16; // maximum joints supported in move joint request, throws if exceeded
+            constexpr uint64_t MAX_SUPPORTED_POSES = 32768; // maximum poses supported in move trajectory request, throws if exceeded
+            constexpr uint64_t MAX_ERROR_MESSAGE_LENGTH = 4096; // maximum error message length, clipped if exceeded
 
             namespace serialization
             {
