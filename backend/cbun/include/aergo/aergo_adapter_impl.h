@@ -2,15 +2,25 @@
 
 #include "aergo/aergo_adapter.h"
 #include "robot_module_kassow/rpc/rpc_transport.h"
+#include "module_helpers/robot_interface/cpp17_utils.h"
+#include "module_helpers/robot_interface/features/robot_control/messages.h"
 
 #include <memory>
+#include <vector>
+#include <cstddef>
+#include <thread>
+#include <atomic>
+#include <tuple>
 
 namespace aergo
 {
-    class CbunLogger : public aergo::robot::kassow::rpc::RpcLogger
+    namespace rpc = aergo::robot::kassow::rpc;
+    namespace ri = aergo::module::helpers::robot_interface;
+
+    class CbunLogger : public rpc::RpcLogger
     {
     public:
-        virtual void log(aergo::robot::kassow::rpc::RpcLogType type, const char* message) const noexcept override;
+        virtual void log(rpc::RpcLogType type, const char* message) const noexcept override;
     };
 
     class AergoConnector::Impl {
@@ -38,10 +48,35 @@ namespace aergo
     private:
         bool processActivationParams(const boost::property_tree::ptree &tree);
 
+        int64_t micros() const noexcept;
+
+        void rpcServerThreadFunc();
+        uint64_t generateNextActionId() { return next_action_id_++; }
+        void finishCurrentMoveAction(bool success, const char* error_message = nullptr); // send finished message for current move action if any
+
+        void processRequest(const rpc::RpcServer::IncomingRequest& request);
+        ri::Response processRequestRobotControl(ri::ReqType req_type, uint64_t action_id, Span<const std::byte> request_blob, std::vector<std::byte>& out_response_blob);
+        ri::Response processStartRequestRobotControl(
+            const ri::robot_control::start::requests::deserialization::RequestVariant& request_variant, 
+            std::vector<std::byte>& out_response_blob
+        );
+
+        void handleUpdates();
+        std::tuple<ri::robot_control::RobotStatus, const char*> readRobotStatus();
+        ri::robot_control::Pose readRobotPosition();
+
         AergoConnector* base_;
 
         CbunLogger cbun_logger_;
-        std::unique_ptr<aergo::robot::kassow::rpc::RpcServer> rpc_server_;
+        std::unique_ptr<rpc::RpcServer> rpc_server_;
+        std::thread rpc_server_thread_;
+        std::atomic<bool> rpc_server_running_{false};
+
+        std::vector<std::byte> response_blob_buffer_;
+
+        uint64_t next_action_id_{1};
+
+        std::optional<uint64_t> current_move_action_id_{std::nullopt};
 
         struct {
             u_int16_t server_port;

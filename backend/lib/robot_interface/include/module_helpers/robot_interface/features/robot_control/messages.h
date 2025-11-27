@@ -124,35 +124,35 @@ namespace aergo::module::helpers::robot_interface::robot_control
 
                 struct MoveJointRequest
                 {
-                    std::vector<double> joint_targets;
-                    double speed{};
-                    double acceleration{};
+                    std::vector<double> joint_targets;    // in radians
+                    double speed{};                       // in rad/s
+                    double acceleration{};                // in rad/s^2
                 };
 
                 struct MoveLinearRequest
                 {
-                    Pose   pose_target{};
-                    double speed{};
-                    double acceleration{};
+                    Pose   pose_target{};                 // end effector pose in world coordinates
+                    double speed{};                       // in m/s
+                    double acceleration{};                // in m/s^2
                 };
 
                 struct MoveArcRequest
                 {
-                    Pose            pose_through{};
-                    Pose            pose_target{};
-                    double          speed{};
-                    double          acceleration{};
-                    OrientationType orientation_type{};
-                    bool            as_circle{};
-                    double          circle_percentage{};
+                    Pose            pose_through{};       // control point for the arc in world coordinates
+                    Pose            pose_target{};        // end effector pose in world coordinates
+                    double          speed{};              // in m/s
+                    double          acceleration{};       // in m/s^2
+                    OrientationType orientation_type{};   // type of orientation to use
+                    bool            as_circle{};          // if true, treat movement as percentage of full circle
+                    double          circle_percentage{};  // percentage of full circle to move along if as_circle is true
                 };
 
                 struct MoveTrajectoryRequest
                 {
-                    std::vector<Pose> pose_targets;
-                    double            speed{};
-                    double            acceleration{};
-                    OrientationType   orientation_type{};
+                    std::vector<Pose> pose_targets;       // end effector poses in world coordinates
+                    double            speed{};            // in m/s
+                    double            acceleration{};     // in m/s^2
+                    OrientationType   orientation_type{}; // type of orientation to use
                 };
 
                 struct GetRobotSpecsRequest

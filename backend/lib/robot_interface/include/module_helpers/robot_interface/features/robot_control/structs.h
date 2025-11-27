@@ -22,7 +22,7 @@ namespace aergo::module::helpers::robot_interface::robot_control
 
     struct Pose
     {
-        Vector3 position;        // Position in world coordinates, in meters.
+        Vector3 position;       // Position in world coordinates, in meters.
         Quaternion orientation; // Orientation as a normalized quaternion representing the rotation from local coordinates to world coordinates (v_world = orientation * v_local)
     };
 
@@ -41,8 +41,8 @@ namespace aergo::module::helpers::robot_interface::robot_control
 
     struct JointRange
     {
-        double min;
-        double max;
+        double min; // in radians
+        double max; // in radians
     };
 
     struct RobotSpecs

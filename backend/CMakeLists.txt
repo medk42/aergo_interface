@@ -22,7 +22,7 @@ file(GLOB_RECURSE PROJECT_SOURCES
 set(KR2_API_LIBS kr2rc_api kr2_io_api kr2_program_api)
 add_library(${PROJECT_NAME} SHARED ${PROJECT_SOURCES})
 include_directories(${PROJECT_NAME} PRIVATE cbun/include $ENV{KR2_INSTALL_FOLDER}/include)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${KR2_API_LIBS} helpers___robot_interface kassow_rpc)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${KR2_API_LIBS} helpers___robot_interface helpers___serialization_helper kassow_rpc)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
     CXX_VISIBILITY_PRESET hidden
