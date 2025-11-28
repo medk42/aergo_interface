@@ -11,6 +11,7 @@
 #include <thread>
 #include <atomic>
 #include <tuple>
+#include <optional>
 
 namespace aergo
 {
@@ -63,7 +64,7 @@ namespace aergo
 
         void handleUpdates();
         std::tuple<ri::robot_control::RobotStatus, const char*> readRobotStatus();
-        ri::robot_control::Pose readRobotPosition();
+        std::optional<ri::robot_control::Pose> readRobotPosition();
 
         AergoConnector* base_;
 

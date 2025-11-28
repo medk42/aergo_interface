@@ -429,7 +429,13 @@ void AergoConnector::Impl::handleUpdates()
     uint64_t timestamp_us = static_cast<uint64_t>(micros());
 
     auto [robot_status, error_message] = readRobotStatus();
-    auto robot_pose = readRobotPosition();
+    auto robot_pose_opt = readRobotPosition();
+    if (!robot_pose_opt)
+    {
+        LOG_ERR("Failed to read robot position for status update.");
+        return;
+    }
+    auto robot_pose = *robot_pose_opt;
 
     auto joint_positions = base_->api_->rc_api_->arm_model_->read_ModelJointsByDuid(kr2rc_api::Model::SysId::JOINT_POSITIONS);
     Span<const double> joint_positions_span(joint_positions->values_.data(), robot_specs.num_joints);
@@ -519,13 +525,19 @@ std::tuple<ri::robot_control::RobotStatus, const char*> AergoConnector::Impl::re
 }
 
 
-ri::robot_control::Pose AergoConnector::Impl::readRobotPosition()
+std::optional<ri::robot_control::Pose> AergoConnector::Impl::readRobotPosition()
 {
     using namespace ri;
     using namespace robot_control;
 
 
     const kr2rc_api::Model::TF *tf = base_->api_->rc_api_->arm_model_->read_TransformationByDuid(kr2rc_api::Model::SysId::FRAME_ROBOTX_TCP, kr2rc_api::Model::SysId::FRAME_WORLD);
+
+    if (!tf)
+    {
+        LOG_ERR("Reading transformation FRAME_ROBOTX_TCP to FRAME_WORLD returned nullptr!");
+        return std::nullopt;
+    }
 
     Pose current_pose {
         .position = {
