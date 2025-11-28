@@ -450,14 +450,6 @@ void AergoConnector::Impl::handleUpdates()
         Span<const std::byte>(response_blob_buffer_.data(), response_blob_buffer_.size())
     );
 
-    LOG_INFO("Sending RobotControl status: status=" << 
-        (robot_status == RobotStatus::IDLE ? "IDLE" : 
-         robot_status == RobotStatus::MOVING ? "MOVING" : 
-         "ERROR") << ", msg: " << (error_message ? error_message : "NO_MSG") << ", timestamp_us=" << timestamp_us << 
-        ", pose=(" << robot_pose.position.x << ", " << robot_pose.position.y << ", " << robot_pose.position.z << ")"   
-
-    );
-
 
 
     if (robot_status == RobotStatus::IDLE && current_move_action_id_)
