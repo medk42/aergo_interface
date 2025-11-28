@@ -265,7 +265,9 @@ namespace aergo::module::helpers::robot_interface::robot_control
             /// Layout (payload):
             ///    [u8 version]
             ///    [u64 timestamp_us]
-            ///    [Pose:7xf64 current_pose]
+            ///    [Pose:7xf64 base_pose]
+            ///    [Pose:7xf64 flange_pose]
+            ///    [Pose:7xf64 end_effector_pose]
             ///    [u8 joint_count][joint_count * f64 joint_positions]
             ///    [RobotStatus:u8 status]
             ///    [bool has_error_msg]
@@ -273,12 +275,14 @@ namespace aergo::module::helpers::robot_interface::robot_control
             ///       [u64 msg_len][msg_len * char8 / utf-8]
             /// @param buffer Buffer to serialize the message into.
             /// @param timestamp_us Timestamp of the status message in microseconds.
-            /// @param current_pose The robot's current pose in world coordinates (pose of the end-effector).
+            /// @param base_pose The robot's base pose in world coordinates.
+            /// @param flange_pose The robot's tool flange pose in world coordinates (tool mounting point on robot, fixed)
+            /// @param end_effector_pose The robot's end-effector pose in world coordinates (actual tool position, may vary based on tool attached).
             /// @param joint_positions The robot's current joint positions.
             /// @param status The robot's current status.
             /// @param error_msg Optional error message if the robot is in an error state (only serialized if status is ERROR, can be nullptr).
             /// @return A serialized status message.
-            std::vector<std::byte>& statusMessage(std::vector<std::byte>& buffer, uint64_t timestamp_us, Pose current_pose, Span<const double> joint_positions, RobotStatus status, const char* error_msg);
+            std::vector<std::byte>& statusMessage(std::vector<std::byte>& buffer, uint64_t timestamp_us, Pose base_pose, Pose flange_pose, Pose end_effector_pose, Span<const double> joint_positions, RobotStatus status, const char* error_msg);
         }
 
         namespace deserialization
@@ -287,11 +291,13 @@ namespace aergo::module::helpers::robot_interface::robot_control
 
             struct StatusMessage
             {
-                uint64_t          timestamp_us{};
-                Pose              current_pose{};
-                std::vector<double> joint_positions;
-                RobotStatus      status{};
-                std::string      error_msg;
+                uint64_t          timestamp_us{};      // timestamp of the status message in microseconds
+                Pose              base_pose{};         // base pose in world coordinates
+                Pose              flange_pose{};       // tool flange pose in world coordinates (mounting point on robot, fixed)
+                Pose              end_effector_pose{}; // end-effector pose in world coordinates (actual tool position, may vary based on tool attached)
+                std::vector<double> joint_positions;   // joint positions in radians
+                RobotStatus      status{};             // current robot status
+                std::string      error_msg;            // optional error message if in error state
             };
 
             /// @brief Deserialize a status message from the buffer.

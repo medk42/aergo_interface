@@ -461,13 +461,15 @@ bool update::requests::deserialization::deserializeMoveRequest(BufferReader& rea
 /// Start Message Serialization
 /// ============================
 
-std::vector<std::byte>& status_messages::serialization::statusMessage(std::vector<std::byte>& buffer, uint64_t timestamp_us, Pose current_pose, Span<const double> joint_positions, RobotStatus status, const char* error_msg)
+std::vector<std::byte>& status_messages::serialization::statusMessage(std::vector<std::byte>& buffer, uint64_t timestamp_us, Pose base_pose, Pose flange_pose, Pose end_effector_pose, Span<const double> joint_positions, RobotStatus status, const char* error_msg)
 {
     buffer.clear();
 
     ser::push<uint8_t>(buffer, ROBOT_CONTROL_MAJOR_VERSION);
     ser::push<uint64_t>(buffer, timestamp_us);
-    pushPose(buffer, current_pose);
+    pushPose(buffer, base_pose);
+    pushPose(buffer, flange_pose);
+    pushPose(buffer, end_effector_pose);
 
     if (joint_positions.size() > start::requests::MAX_SUPPORTED_JOINTS)
     {
@@ -516,7 +518,17 @@ bool status_messages::deserialization::deserializeStatusMessage(BufferReader& re
         return false;
     }
 
-    if (!deserializePose(reader, out_status_message.current_pose))
+    if (!deserializePose(reader, out_status_message.base_pose))
+    {
+        return false;
+    }
+
+    if (!deserializePose(reader, out_status_message.flange_pose))
+    {
+        return false;
+    }
+
+    if (!deserializePose(reader, out_status_message.end_effector_pose))
     {
         return false;
     }

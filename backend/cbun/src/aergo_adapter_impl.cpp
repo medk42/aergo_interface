@@ -429,20 +429,22 @@ void AergoConnector::Impl::handleUpdates()
     uint64_t timestamp_us = static_cast<uint64_t>(micros());
 
     auto [robot_status, error_message] = readRobotStatus();
-    auto robot_pose_opt = readRobotPosition();
-    if (!robot_pose_opt)
+
+    Pose base_pose, flange_pose, end_effector_pose;
+    if (!readRobotPosition(base_pose, flange_pose, end_effector_pose))
     {
         LOG_ERR("Failed to read robot position for status update.");
         return;
     }
-    auto robot_pose = *robot_pose_opt;
 
     auto joint_positions = base_->api_->rc_api_->arm_model_->read_ModelJointsByDuid(kr2rc_api::Model::SysId::JOINT_POSITIONS);
     Span<const double> joint_positions_span(joint_positions->values_.data(), robot_specs.num_joints);
 
 
     status_messages::serialization::statusMessage(
-        response_blob_buffer_, timestamp_us, robot_pose, joint_positions_span, robot_status, error_message
+        response_blob_buffer_, timestamp_us, 
+        base_pose, flange_pose, end_effector_pose, 
+        joint_positions_span, robot_status, error_message
     );
 
     rpc_server_->sendStatusMessage(
@@ -517,30 +519,21 @@ std::tuple<ri::robot_control::RobotStatus, const char*> AergoConnector::Impl::re
 }
 
 
-std::optional<ri::robot_control::Pose> AergoConnector::Impl::readRobotPosition()
+ri::robot_control::Pose parseRobotPoseFromTF(const kr2rc_api::Model::TF& tf)
 {
     using namespace ri;
     using namespace robot_control;
 
-
-    const kr2rc_api::Model::TF *tf = base_->api_->rc_api_->arm_model_->read_TransformationByDuid(kr2rc_api::Model::SysId::FRAME_ROBOTX_TCP, kr2rc_api::Model::SysId::FRAME_WORLD);
-
-    if (!tf)
-    {
-        LOG_ERR("Reading transformation FRAME_ROBOTX_TCP to FRAME_WORLD returned nullptr!");
-        return std::nullopt;
-    }
-
     Pose current_pose {
         .position = {
-            .x = tf->pose_.p_.x(),
-            .y = tf->pose_.p_.y(),
-            .z = tf->pose_.p_.z()
+            .x = tf.pose_.p_.x(),
+            .y = tf.pose_.p_.y(),
+            .z = tf.pose_.p_.z()
         },
         .orientation = {}
     };
 
-    tf->pose_.M_.getQuaternion(
+    tf.pose_.M_.getQuaternion(
         current_pose.orientation.x,
         current_pose.orientation.y,
         current_pose.orientation.z,
@@ -548,4 +541,32 @@ std::optional<ri::robot_control::Pose> AergoConnector::Impl::readRobotPosition()
     );
 
     return current_pose;
+}
+
+
+bool AergoConnector::Impl::readRobotPosition(
+    ri::robot_control::Pose& out_base_pose, 
+    ri::robot_control::Pose& out_flange_pose,
+    ri::robot_control::Pose& out_end_effector_pose
+)
+{
+    using namespace ri;
+    using namespace robot_control;
+
+
+    const kr2rc_api::Model::TF *tcp = base_->api_->rc_api_->arm_model_->read_TransformationByDuid(kr2rc_api::Model::SysId::FRAME_ROBOTX_TCP, kr2rc_api::Model::SysId::FRAME_WORLD);
+    const kr2rc_api::Model::TF *tfc = base_->api_->rc_api_->arm_model_->read_TransformationByDuid(kr2rc_api::Model::SysId::FRAME_ROBOT_FLANGE, kr2rc_api::Model::SysId::FRAME_WORLD);
+    const kr2rc_api::Model::TF *base = base_->api_->rc_api_->arm_model_->read_TransformationByDuid(kr2rc_api::Model::SysId::FRAME_ROBOT_BASE, kr2rc_api::Model::SysId::FRAME_WORLD);
+
+    if (!tcp || !tfc || !base)
+    {
+        LOG_ERR("Reading robot transformations to FRAME_WORLD returned nullptr!");
+        return false;
+    }
+
+    out_end_effector_pose = parseRobotPoseFromTF(*tcp);
+    out_flange_pose = parseRobotPoseFromTF(*tfc);
+    out_base_pose = parseRobotPoseFromTF(*base);
+
+    return true;
 }
