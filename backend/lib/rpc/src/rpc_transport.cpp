@@ -860,6 +860,7 @@ namespace aergo::robot::kassow::rpc
         std::array<uint8_t, FRAME_HEADER_SIZE> header_raw{};
         if (!client_.recvAll(header_raw.data(), header_raw.size(), timeout, logger_))
         {
+            log(RpcLogType::ERROR, "RPC server failed to receive header");
             return false;
         }
 
@@ -869,7 +870,7 @@ namespace aergo::robot::kassow::rpc
             return false;
         }
 
-        if (header.payload_size > MAX_FRAME_SIZE || header.blob_size > MAX_FRAME_SIZE)
+                if (header.payload_size > MAX_FRAME_SIZE || header.blob_size > MAX_FRAME_SIZE)
         {
             log(RpcLogType::ERROR, "RPC server frame too large");
             return false;
@@ -881,6 +882,7 @@ namespace aergo::robot::kassow::rpc
         {
             if (!client_.recvAll(reinterpret_cast<uint8_t*>(payload_buffer_.data()), header.payload_size, timeout, logger_))
             {
+                log(RpcLogType::ERROR, "RPC server failed to receive payload");
                 return false;
             }
         }
@@ -888,6 +890,7 @@ namespace aergo::robot::kassow::rpc
         {
             if (!client_.recvAll(reinterpret_cast<uint8_t*>(blob_buffer_.data()), header.blob_size, timeout, logger_))
             {
+                log(RpcLogType::ERROR, "RPC server failed to receive blob");
                 return false;
             }
         }
