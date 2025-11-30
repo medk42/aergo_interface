@@ -219,7 +219,7 @@ void AergoConnector::Impl::rpcServerThreadFunc()
     {
         base_->api_->rc_api_->spin(); // update internal state
 
-        while (rpc_server_->pollOnce(std::chrono::milliseconds(10))) ; // drain all messages
+        while (rpc_server_->pollOnce(std::chrono::milliseconds(200))) ; // drain all messages
 
         handleUpdates();
 
@@ -378,6 +378,7 @@ ri::Response AergoConnector::Impl::processStartRequestRobotControl(
             .follow();
 
         current_move_action_id_ = generateNextActionId();
+        current_move_start_time_us_ = micros();
 
         return Response {
             .resp_type = RespType::SUCCESS_IN_PROGRESS,
@@ -410,10 +411,15 @@ void AergoConnector::Impl::finishCurrentMoveAction(bool success, const char* err
             response_blob_buffer_.clear();
         }
 
-        rpc_server_->sendFinishedMessage(ri::FinishedMessage {
-            .action_id = *current_move_action_id_,
-            .success = success
-        }, Span<const std::byte>(response_blob_buffer_.data(), response_blob_buffer_.size()));
+        if (
+            !rpc_server_->sendFinishedMessage(ri::FinishedMessage {
+                .action_id = *current_move_action_id_,
+                .success = success
+            }, Span<const std::byte>(response_blob_buffer_.data(), response_blob_buffer_.size()))
+        )
+        {
+            LOG_WARN("Failed to send FinishedMessage for move action " << *current_move_action_id_);
+        }
 
         current_move_action_id_.reset();
     }
@@ -453,14 +459,16 @@ void AergoConnector::Impl::handleUpdates()
     );
 
 
-
-    if (robot_status == RobotStatus::IDLE && current_move_action_id_)
+    if (micros() > current_move_start_time_us_ + min_move_duration_us_)
     {
-        finishCurrentMoveAction(true);
-    }
-    else if (robot_status == RobotStatus::ERROR && current_move_action_id_)
-    {
-        finishCurrentMoveAction(false, error_message);
+        if (robot_status == RobotStatus::IDLE && current_move_action_id_)
+        {
+            finishCurrentMoveAction(true);
+        }
+        else if (robot_status == RobotStatus::ERROR && current_move_action_id_)
+        {
+            finishCurrentMoveAction(false, error_message);
+        }
     }
 }
 
@@ -481,8 +489,9 @@ std::tuple<ri::robot_control::RobotStatus, const char*> AergoConnector::Impl::re
     // In our use, the robot should only enter standby or tracking mode when it is not actively moving via program control,
     // in freedrive mode or some error state.
     auto motion_flags_cleared = motion_flags & ~(
-        kr2rc_api::State::SysStat_RCState::MOTION_FLAG_STANDBY |
-        kr2rc_api::State::SysStat_RCState::MOTION_FLAG_TRACKING
+        kr2rc_api::State::SysStat_RCState::MOTION_FLAG_STANDBY  |
+        kr2rc_api::State::SysStat_RCState::MOTION_FLAG_TRACKING | 
+        kr2rc_api::State::SysStat_RCState::MOTION_FLAG_SYNC         // SYNC happens at the end of a move, we can ignore it
     );
 
 
@@ -494,11 +503,13 @@ std::tuple<ri::robot_control::RobotStatus, const char*> AergoConnector::Impl::re
     {
         current_status = RobotStatus::ERROR;
         error_message = "Safety flags are engaged (PSTOP, ESTOP).";
+        LOG_WARN("Robot in ERROR state due to safety flags: " << safety_flags);
     }
     else if (motion_flags_cleared != 0)
     {
         current_status = RobotStatus::ERROR;
         error_message = "Motion flags indicate an unexpected state (not IDLE or MOVING).";
+        LOG_WARN("Robot in ERROR state due to unexpected motion flags: " << motion_flags);
     }
     else if (is_tracking)
     {

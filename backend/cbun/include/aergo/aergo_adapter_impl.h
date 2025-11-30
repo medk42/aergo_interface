@@ -81,6 +81,8 @@ namespace aergo
         uint64_t next_action_id_{1};
 
         std::optional<uint64_t> current_move_action_id_{std::nullopt};
+        int64_t current_move_start_time_us_{0};
+        const int64_t min_move_duration_us_{100000}; // do not report move as finished before this time has elapsed
 
         struct {
             u_int16_t server_port;
