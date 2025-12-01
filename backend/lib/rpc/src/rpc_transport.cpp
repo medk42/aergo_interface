@@ -578,14 +578,14 @@ namespace aergo::robot::kassow::rpc
         payload.resize(header.payload_size);
         blob.resize(header.blob_size);
 
-                if (header.payload_size > 0)
+        if (header.payload_size > 0)
         {
             if (!socket_.recvAll(reinterpret_cast<uint8_t*>(payload.data()), header.payload_size, timeout, logger_))
             {
                 log(RpcLogType::ERROR, "Failed to receive RPC frame payload");
                 return false;
             }
-                    }
+        }
         if (header.blob_size > 0)
         {
             if (!socket_.recvAll(reinterpret_cast<uint8_t*>(blob.data()), header.blob_size, timeout, logger_))
@@ -593,7 +593,7 @@ namespace aergo::robot::kassow::rpc
                 log(RpcLogType::ERROR, "Failed to receive RPC frame blob");
                 return false;
             }
-                    }
+        }
 
         return true;
     }
@@ -664,16 +664,16 @@ namespace aergo::robot::kassow::rpc
 
         auto payload_arr = serializeRequest(request);
         Span<const std::byte> payload(payload_arr.data(), payload_arr.size());
-                if (!writeFrame(header, payload, request_blob))
+        if (!writeFrame(header, payload, request_blob))
         {
             pending_request_id_.reset();
             return false;
         }
-        
+
         auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline)
         {
-                        RpcFrameHeader incoming{};
+            RpcFrameHeader incoming{};
             auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
             if (!readFrame(incoming, payload_buffer_, blob_buffer_, remaining))
             {
@@ -732,7 +732,8 @@ namespace aergo::robot::kassow::rpc
             return false;
         }
 
-        if (!socket_.waitForData(timeout, logger_))
+        // check if data is available, if not return immediately
+        if (!socket_.waitForData(std::chrono::milliseconds(0), logger_))
         {
             return false; // timeout
         }
@@ -989,7 +990,7 @@ namespace aergo::robot::kassow::rpc
 
         auto payload_arr = serializeResponse(response);
         Span<const std::byte> payload(payload_arr.data(), payload_arr.size());
-        
+
         return sendFrame(header, payload, blob);
     }
 
