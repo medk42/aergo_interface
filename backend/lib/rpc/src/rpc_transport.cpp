@@ -541,19 +541,18 @@ namespace aergo::robot::kassow::rpc
     bool RpcClient::writeFrame(const RpcFrameHeader& header, Span<const std::byte> payload, Span<const std::byte> blob)
     {
         auto header_buf = serializeHeader(header);
-        if (!socket_.sendAll(header_buf.data(), header_buf.size(), logger_))
+        send_buffer_.resize(header_buf.size() + payload.size() + blob.size());
+        std::memcpy(send_buffer_.data(), header_buf.data(), header_buf.size());
+        if (!payload.empty())
         {
-            return false;
+            std::memcpy(send_buffer_.data() + header_buf.size(), payload.data(), payload.size());
         }
-        if (!payload.empty() && !socket_.sendAll(reinterpret_cast<const uint8_t*>(payload.data()), payload.size(), logger_))
+        if (!blob.empty())
         {
-            return false;
+            std::memcpy(send_buffer_.data() + header_buf.size() + payload.size(), blob.data(), blob.size());
         }
-        if (!blob.empty() && !socket_.sendAll(reinterpret_cast<const uint8_t*>(blob.data()), blob.size(), logger_))
-        {
-            return false;
-        }
-        return true;
+
+        return socket_.sendAll(send_buffer_.data(), send_buffer_.size(), logger_);
     }
 
     bool RpcClient::readFrame(RpcFrameHeader& header, std::vector<std::byte>& payload, std::vector<std::byte>& blob, std::chrono::milliseconds timeout)
@@ -951,6 +950,29 @@ namespace aergo::robot::kassow::rpc
         return false;
     }
 
+    bool RpcServer::sendFrame(const RpcFrameHeader& header, Span<const std::byte> payload, Span<const std::byte> blob)
+    {
+        if (!client_.isConnected())
+        {
+            return false;
+        }
+
+        auto header_buf = serializeHeader(header);
+
+        send_buffer_.resize(header_buf.size() + payload.size() + blob.size());
+        std::memcpy(send_buffer_.data(), header_buf.data(), header_buf.size());
+        if (!payload.empty())
+        {
+            std::memcpy(send_buffer_.data() + header_buf.size(), payload.data(), payload.size());
+        }
+        if (!blob.empty())
+        {
+            std::memcpy(send_buffer_.data() + header_buf.size() + payload.size(), blob.data(), blob.size());
+        }
+
+        return client_.sendAll(send_buffer_.data(), send_buffer_.size(), logger_);
+    }
+
     bool RpcServer::sendResponse(uint32_t request_id, const Response& response, Span<const std::byte> blob)
     {
         if (!client_.isConnected())
@@ -967,20 +989,8 @@ namespace aergo::robot::kassow::rpc
 
         auto payload_arr = serializeResponse(response);
         Span<const std::byte> payload(payload_arr.data(), payload_arr.size());
-        auto header_buf = serializeHeader(header);
-        if (!client_.sendAll(header_buf.data(), header_buf.size(), logger_))
-        {
-            return false;
-        }
-        if (!payload.empty() && !client_.sendAll(reinterpret_cast<const uint8_t*>(payload.data()), payload.size(), logger_))
-        {
-            return false;
-        }
-        if (!blob.empty() && !client_.sendAll(reinterpret_cast<const uint8_t*>(blob.data()), blob.size(), logger_))
-        {
-            return false;
-        }
-        return true;
+        
+        return sendFrame(header, payload, blob);
     }
 
     bool RpcServer::sendStatusMessage(const StatusMessage& status, Span<const std::byte> blob)
@@ -999,20 +1009,8 @@ namespace aergo::robot::kassow::rpc
 
         auto payload_arr = serializeStatus(status);
         Span<const std::byte> payload(payload_arr.data(), payload_arr.size());
-        auto header_buf = serializeHeader(header);
-        if (!client_.sendAll(header_buf.data(), header_buf.size(), logger_))
-        {
-            return false;
-        }
-        if (!client_.sendAll(reinterpret_cast<const uint8_t*>(payload.data()), payload.size(), logger_))
-        {
-            return false;
-        }
-        if (!blob.empty() && !client_.sendAll(reinterpret_cast<const uint8_t*>(blob.data()), blob.size(), logger_))
-        {
-            return false;
-        }
-        return true;
+
+        return sendFrame(header, payload, blob);
     }
 
     bool RpcServer::sendFinishedMessage(const FinishedMessage& finished, Span<const std::byte> blob)
@@ -1031,19 +1029,7 @@ namespace aergo::robot::kassow::rpc
 
         auto payload_arr = serializeFinished(finished);
         Span<const std::byte> payload(payload_arr.data(), payload_arr.size());
-        auto header_buf = serializeHeader(header);
-        if (!client_.sendAll(header_buf.data(), header_buf.size(), logger_))
-        {
-            return false;
-        }
-        if (!client_.sendAll(reinterpret_cast<const uint8_t*>(payload.data()), payload.size(), logger_))
-        {
-            return false;
-        }
-        if (!blob.empty() && !client_.sendAll(reinterpret_cast<const uint8_t*>(blob.data()), blob.size(), logger_))
-        {
-            return false;
-        }
-        return true;
+
+        return sendFrame(header, payload, blob);
     }
 }

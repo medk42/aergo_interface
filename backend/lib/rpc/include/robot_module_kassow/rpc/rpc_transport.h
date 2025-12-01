@@ -121,6 +121,7 @@ namespace aergo::robot::kassow::rpc
 
         std::vector<std::byte> payload_buffer_;
         std::vector<std::byte> blob_buffer_;
+        std::vector<uint8_t> send_buffer_;
     };
 
     class RpcServer
@@ -148,6 +149,7 @@ namespace aergo::robot::kassow::rpc
     private:
         bool ensureClient();
         void log(RpcLogType type, std::string_view msg) const;
+        bool sendFrame(const RpcFrameHeader& header, Span<const std::byte> payload, Span<const std::byte> blob);
 
         const RpcLogger* logger_;
         int listen_fd_;
@@ -155,5 +157,6 @@ namespace aergo::robot::kassow::rpc
         std::function<void(const IncomingRequest&)> request_handler_;
         std::vector<std::byte> payload_buffer_;
         std::vector<std::byte> blob_buffer_;
+        std::vector<uint8_t> send_buffer_;
     };
 }
