@@ -72,6 +72,8 @@ namespace aergo::robot::kassow::rpc
 
         int nativeHandle() const noexcept;
 
+        bool setNoDelay(bool no_delay, const RpcLogger* logger);
+
     private:
         bool ensureInitialized(const RpcLogger* logger);
         void logError(const RpcLogger* logger, std::string_view context) const;

@@ -25,6 +25,7 @@ static constexpr int INVALID_SOCKET_FD = INVALID_SOCKET;
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <netinet/tcp.h>
 using socket_len_t = socklen_t;
 using socket_send_recv_t = ssize_t;
 static constexpr int INVALID_SOCKET_FD = -1;
@@ -37,6 +38,7 @@ static constexpr int INVALID_SOCKET_FD = -1;
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <netinet/tcp.h>
 using socket_len_t = socklen_t;
 using socket_send_recv_t = ssize_t;
 static constexpr int INVALID_SOCKET_FD = -1;
@@ -465,6 +467,24 @@ namespace aergo::robot::kassow::rpc
     }
 
 
+    bool TcpSocket::setNoDelay(bool no_delay, const RpcLogger* logger)
+    {
+        if (!socket_fd_.has_value())
+        {
+            return false;
+        }
+
+        int flag = no_delay ? 1 : 0;
+        int result = ::setsockopt(*socket_fd_, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&flag), sizeof(int));
+        if (result != 0)
+        {
+            logError(logger, "setsockopt TCP_NODELAY failed");
+            return false;
+        }
+        return true;
+    }
+
+
     RpcClient::RpcClient(const RpcLogger* logger)
         : logger_(logger), next_request_id_(1)
     {}
@@ -486,7 +506,14 @@ namespace aergo::robot::kassow::rpc
     {
         std::lock_guard<std::mutex> lock(socket_mutex_);
         pending_request_id_.reset();
-        return socket_.connect(host, port, logger_);
+        bool ok = socket_.connect(host, port, logger_);
+
+        if (ok)
+        {
+            ok = socket_.setNoDelay(true, logger_);
+        }
+
+        return ok;
     }
 
     void RpcClient::disconnect()
@@ -552,14 +579,14 @@ namespace aergo::robot::kassow::rpc
         payload.resize(header.payload_size);
         blob.resize(header.blob_size);
 
-        if (header.payload_size > 0)
+                if (header.payload_size > 0)
         {
             if (!socket_.recvAll(reinterpret_cast<uint8_t*>(payload.data()), header.payload_size, timeout, logger_))
             {
                 log(RpcLogType::ERROR, "Failed to receive RPC frame payload");
                 return false;
             }
-        }
+                    }
         if (header.blob_size > 0)
         {
             if (!socket_.recvAll(reinterpret_cast<uint8_t*>(blob.data()), header.blob_size, timeout, logger_))
@@ -567,7 +594,7 @@ namespace aergo::robot::kassow::rpc
                 log(RpcLogType::ERROR, "Failed to receive RPC frame blob");
                 return false;
             }
-        }
+                    }
 
         return true;
     }
@@ -638,19 +665,20 @@ namespace aergo::robot::kassow::rpc
 
         auto payload_arr = serializeRequest(request);
         Span<const std::byte> payload(payload_arr.data(), payload_arr.size());
-        if (!writeFrame(header, payload, request_blob))
+                if (!writeFrame(header, payload, request_blob))
         {
             pending_request_id_.reset();
             return false;
         }
-
+        
         auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline)
         {
-            RpcFrameHeader incoming{};
+                        RpcFrameHeader incoming{};
             auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
             if (!readFrame(incoming, payload_buffer_, blob_buffer_, remaining))
             {
+                log(RpcLogType::ERROR, "Failed to receive RPC frame payload");
                 break;
             }
 
@@ -831,6 +859,7 @@ namespace aergo::robot::kassow::rpc
             if (new_fd != INVALID_SOCKET_FD)
             {
                 client_.adopt(new_fd, logger_);
+                client_.setNoDelay(true, logger_);
                 log(RpcLogType::INFO, "Accepted RPC client connection");
                 return true;
             }
