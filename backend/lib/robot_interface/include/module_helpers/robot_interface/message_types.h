@@ -47,13 +47,13 @@ namespace aergo::module::helpers::robot_interface
     /// @brief Structure of a robot interface request message.
     /// There are two types of requests: START_ACTION and UPDATE_ACTION.
     /// START_ACTION is used to start a new action, UPDATE_ACTION is used to update an ongoing action.
-    /// START_ACTION requires the feature to be specified, while UPDATE_ACTION requires the action_id to identify the active action instance.
+    /// START_ACTION requires the feature to be specified, while UPDATE_ACTION requires the feature and the action_id to identify the active action instance.
     /// START_ACTION: send { .req_type = ReqType::START_ACTION, .feature = <feature>, .action_id = 0 } followed by the data blob (if any).
-    /// UPDATE_ACTION send: { .req_type = ReqType::UPDATE_ACTION, .feature = RobotFeature::NONE, .action_id = <id of action instance> }, followed by the data blob (if any).
+    /// UPDATE_ACTION send: { .req_type = ReqType::UPDATE_ACTION, .feature = <feature>, .action_id = <id of action instance> }, followed by the data blob (if any).
     struct Request
     {
         ReqType req_type;       // Type of the request
-        RobotFeature feature;   // Specifies which feature the request is for (used only for START_ACTION)
+        RobotFeature feature;   // Specifies which feature the request is for (used both for START_ACTION and UPDATE_ACTION)
         uint64_t action_id;     // Used to identify the action instance (used only for UPDATE_ACTION)
     };
 
