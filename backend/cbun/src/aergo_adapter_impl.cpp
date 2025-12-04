@@ -354,36 +354,31 @@ ri::Response AergoConnector::Impl::processStartRequestRobotControl(
     }
     else if (std::holds_alternative<start::requests::deserialization::MoveJointRequest>(request_variant))
     {
-        const auto& move_request = std::get<start::requests::deserialization::MoveJointRequest>(request_variant);
-
-        if (move_request.joint_targets.size() != robot_specs.num_joints)
-        {
-            return errorResponse(out_response_blob, "Invalid joint count in MoveJoint request.");
-        }
-
-        if (move_request.acceleration > robot_specs.max_acceleration_angular ||
-            move_request.speed > robot_specs.max_velocity_angular)
-        {
-            return errorResponse(out_response_blob, "Requested speed or acceleration exceeds robot limits.");
-        }
-
-        finishCurrentMoveAction(false, "Move was interrupted by a new move request.");
-
-        kr2rc_api2::Move::jointSpaceBlend()
-            .toTarget(kr2rc_api2::JSVector(move_request.joint_targets.data()))
-            .withTargetType(kr2rc_api2::Move::TargetType::eStopPoint)
-            .withTargetSpeed(move_request.speed)
-            .withBlendMaxAcceleration(move_request.acceleration)
-            .withSynchronization(kr2rc_api2::Move::ASYNC)
-            .follow();
-
-        current_move_action_id_ = generateNextActionId();
-        current_move_start_time_us_ = micros();
-
-        return Response {
-            .resp_type = RespType::SUCCESS_IN_PROGRESS,
-            .action_id = *current_move_action_id_
-        };
+        return processMoveJoint(
+            std::get<start::requests::deserialization::MoveJointRequest>(request_variant),
+            out_response_blob
+        );
+    }
+    else if (std::holds_alternative<start::requests::deserialization::MoveLinearRequest>(request_variant))
+    {
+        return processMoveLinear(
+            std::get<start::requests::deserialization::MoveLinearRequest>(request_variant),
+            out_response_blob
+        );
+    }
+    else if (std::holds_alternative<start::requests::deserialization::MoveArcRequest>(request_variant))
+    {
+        return processMoveArc(
+            std::get<start::requests::deserialization::MoveArcRequest>(request_variant),
+            out_response_blob
+        );
+    }
+    else if (std::holds_alternative<start::requests::deserialization::MoveTrajectoryRequest>(request_variant))
+    {
+        return processMoveTrajectory(
+            std::get<start::requests::deserialization::MoveTrajectoryRequest>(request_variant),
+            out_response_blob
+        );
     }
     else
     {
@@ -393,6 +388,216 @@ ri::Response AergoConnector::Impl::processStartRequestRobotControl(
             .action_id = 0
         };
     }
+}
+
+
+ri::Response AergoConnector::Impl::processMoveJoint(
+    const rc::start::requests::deserialization::MoveJointRequest& move_joint_request,
+    std::vector<std::byte>& out_response_blob
+)
+{
+    using namespace ri;
+    using namespace rc;
+
+    if (move_joint_request.joint_targets.size() != robot_specs.num_joints)
+    {
+        return errorResponse(out_response_blob, "Invalid joint count in MoveJoint request.");
+    }
+
+    if (move_joint_request.acceleration > robot_specs.max_acceleration_angular ||
+        move_joint_request.speed > robot_specs.max_velocity_angular)
+    {
+        return errorResponse(out_response_blob, "Requested speed or acceleration exceeds robot limits.");
+    }
+
+    finishCurrentMoveAction(false, "Move was interrupted by a new move request.");
+
+    kr2rc_api2::Move::jointSpaceBlend()
+        .toTarget(kr2rc_api2::JSVector(move_joint_request.joint_targets.data()))
+        .withTargetType(kr2rc_api2::Move::TargetType::eStopPoint)
+        .withTargetSpeed(move_joint_request.speed)
+        .withBlendMaxAcceleration(move_joint_request.acceleration)
+        .withSynchronization(kr2rc_api2::Move::ASYNC)
+        .follow();
+
+    current_move_action_id_ = generateNextActionId();
+    current_move_start_time_us_ = micros();
+
+    return Response {
+        .resp_type = RespType::SUCCESS_IN_PROGRESS,
+        .action_id = *current_move_action_id_
+    };
+}
+
+
+kr2rc_api2::Pose kr2PoseFromRcPose(const rc::Pose& rc_pose)
+{
+    return kr2rc_api2::Pose {
+        .frame_ = {
+            .M_ = kr2rc_api2::Rotation::Quaternion(
+                rc_pose.orientation.x, 
+                rc_pose.orientation.y, 
+                rc_pose.orientation.z, 
+                rc_pose.orientation.w
+            ),
+            .p_ = kr2rc_api2::Vector(
+                rc_pose.position.x, 
+                rc_pose.position.y, 
+                rc_pose.position.z
+            )
+        },
+        .ref_frame_id_ = 0
+    };
+}
+
+
+ri::Response AergoConnector::Impl::processMoveLinear(
+    const rc::start::requests::deserialization::MoveLinearRequest& move_linear_request,
+    std::vector<std::byte>& out_response_blob
+)
+{
+    using namespace ri;
+    using namespace rc;
+
+    if (move_linear_request.speed > robot_specs.max_velocity_linear ||
+        move_linear_request.acceleration > robot_specs.max_acceleration_linear)
+    {
+        return errorResponse(out_response_blob, "Requested speed or acceleration exceeds robot limits.");
+    }
+
+    finishCurrentMoveAction(false, "Move was interrupted by a new move request.");
+
+    kr2rc_api2::Move::workSpaceBlend()
+        .toTarget(kr2PoseFromRcPose(move_linear_request.pose_target))
+        .withTargetType(kr2rc_api2::Move::TargetType::eStopPoint)
+        .withTargetSpeed(move_linear_request.speed)
+        .withBlendMaxAcceleration(move_linear_request.acceleration)
+        .withSynchronization(kr2rc_api2::Move::ASYNC)
+        .follow();
+
+    current_move_action_id_ = generateNextActionId();
+    current_move_start_time_us_ = micros();
+
+    return Response {
+        .resp_type = RespType::SUCCESS_IN_PROGRESS,
+        .action_id = *current_move_action_id_
+    };
+}
+
+
+ri::Response AergoConnector::Impl::processMoveArc(
+    const rc::start::requests::deserialization::MoveArcRequest& move_arc_request,
+    std::vector<std::byte>& out_response_blob
+)
+{
+    using namespace ri;
+    using namespace rc;
+
+    if (move_arc_request.speed > robot_specs.max_velocity_linear ||
+        move_arc_request.acceleration > robot_specs.max_acceleration_linear)
+    {
+        return errorResponse(out_response_blob, "Requested speed or acceleration exceeds robot limits.");
+    }
+
+    if (move_arc_request.as_circle && move_arc_request.circle_percentage <= 0.0)
+    {
+        return errorResponse(out_response_blob, "Invalid circle percentage in MoveArc request.");
+    }
+
+    finishCurrentMoveAction(false, "Move was interrupted by a new move request.");
+
+    auto arc_req = kr2rc_api2::Move::arc()
+        .withGeometry(
+            kr2PoseFromRcPose(move_arc_request.pose_through), 
+            kr2PoseFromRcPose(move_arc_request.pose_target)
+        )
+        .withTargetType(kr2rc_api2::Move::TargetType::eStopPoint)
+        .withConstantSpeed(move_arc_request.speed)
+        .withAcceleration(move_arc_request.acceleration)
+        .withOrientation(
+            move_arc_request.orientation_type == OrientationType::FIXED ? 
+                kr2rc_api2::Move::TrajectoryArcRequest::Orientation::eFixed : 
+                kr2rc_api2::Move::TrajectoryArcRequest::Orientation::eTangential
+        )
+        .withSynchronization(kr2rc_api2::Move::ASYNC);
+    
+    if (move_arc_request.as_circle)
+    {
+        arc_req = arc_req.asCircle(move_arc_request.circle_percentage * 2.0 * 3.14159265358979323846);
+    }
+    
+    arc_req.follow();
+
+    current_move_action_id_ = generateNextActionId();
+    current_move_start_time_us_ = micros();
+
+    return Response {
+        .resp_type = RespType::SUCCESS_IN_PROGRESS,
+        .action_id = *current_move_action_id_
+    };
+}
+
+
+ri::Response AergoConnector::Impl::processMoveTrajectory(
+    const rc::start::requests::deserialization::MoveTrajectoryRequest& move_trajectory_request,
+    std::vector<std::byte>& out_response_blob
+)
+{
+    using namespace ri;
+    using namespace rc;
+
+    if (move_trajectory_request.speed > robot_specs.max_velocity_linear ||
+        move_trajectory_request.acceleration > robot_specs.max_acceleration_linear)
+    {
+        return errorResponse(out_response_blob, "Requested speed or acceleration exceeds robot limits.");
+    }
+
+    if (move_trajectory_request.pose_targets.size() < 2)
+    {
+        return errorResponse(out_response_blob, "MoveTrajectory request must contain at least 2 target poses.");
+    }
+
+    finishCurrentMoveAction(false, "Move was interrupted by a new move request.");
+
+    for (size_t i = 0; i < move_trajectory_request.pose_targets.size(); ++i)
+    {
+        auto spline_move = kr2rc_api2::Move::spline()
+            .withKnotPoint(kr2PoseFromRcPose(move_trajectory_request.pose_targets[i]))
+            .withApproximateSpeed(move_trajectory_request.speed)
+            .withAcceleration(move_trajectory_request.acceleration)
+            .withSynchronization(kr2rc_api2::Move::ASYNC)
+            .withOrientation(
+                move_trajectory_request.orientation_type == OrientationType::FIXED ? 
+                    kr2rc_api2::Move::TrajectorySplineRequest::Orientation::eFixed : 
+                    kr2rc_api2::Move::TrajectorySplineRequest::Orientation::eTangentialSecondaryZ
+            );
+        
+        if (i == move_trajectory_request.pose_targets.size() - 1)
+        {
+            spline_move = spline_move.withTargetType(kr2rc_api2::Move::TargetType::eStopPoint);
+        }
+        else
+        {
+            spline_move = spline_move.withTargetType(kr2rc_api2::Move::TargetType::eViaPoint);
+        }
+
+        if (i == 0)
+        {
+            spline_move.follow();
+        }
+        else
+        {
+            spline_move.add();
+        }
+    }
+
+    current_move_action_id_ = generateNextActionId();
+    current_move_start_time_us_ = micros();
+
+    return Response {
+        .resp_type = RespType::SUCCESS_IN_PROGRESS,
+        .action_id = *current_move_action_id_
+    };
 }
 
 

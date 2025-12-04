@@ -16,6 +16,7 @@ namespace aergo
 {
     namespace rpc = aergo::robot::kassow::rpc;
     namespace ri = aergo::module::helpers::robot_interface;
+    namespace rc = ri::robot_control;
 
     class CbunLogger : public rpc::RpcLogger
     {
@@ -57,16 +58,32 @@ namespace aergo
         void processRequest(const rpc::RpcServer::IncomingRequest& request);
         ri::Response processRequestRobotControl(ri::ReqType req_type, uint64_t action_id, Span<const std::byte> request_blob, std::vector<std::byte>& out_response_blob);
         ri::Response processStartRequestRobotControl(
-            const ri::robot_control::start::requests::deserialization::RequestVariant& request_variant, 
+            const rc::start::requests::deserialization::RequestVariant& request_variant, 
+            std::vector<std::byte>& out_response_blob
+        );
+        ri::Response processMoveJoint(
+            const rc::start::requests::deserialization::MoveJointRequest& move_joint_request,
+            std::vector<std::byte>& out_response_blob
+        );
+        ri::Response processMoveLinear(
+            const rc::start::requests::deserialization::MoveLinearRequest& move_linear_request,
+            std::vector<std::byte>& out_response_blob
+        );
+        ri::Response processMoveArc(
+            const rc::start::requests::deserialization::MoveArcRequest& move_arc_request,
+            std::vector<std::byte>& out_response_blob
+        );
+        ri::Response processMoveTrajectory(
+            const rc::start::requests::deserialization::MoveTrajectoryRequest& move_trajectory_request,
             std::vector<std::byte>& out_response_blob
         );
 
         void handleUpdates();
-        std::tuple<ri::robot_control::RobotStatus, const char*> readRobotStatus();
+        std::tuple<rc::RobotStatus, const char*> readRobotStatus();
         bool readRobotPosition(
-            ri::robot_control::Pose& out_base_pose, 
-            ri::robot_control::Pose& out_flange_pose,
-            ri::robot_control::Pose& out_end_effector_pose
+            rc::Pose& out_base_pose, 
+            rc::Pose& out_flange_pose,
+            rc::Pose& out_end_effector_pose
         );
 
         AergoConnector* base_;
