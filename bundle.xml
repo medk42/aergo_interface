@@ -15,12 +15,5 @@
                 <default>15050</default>
             </param>
         </config>
-        <method name="testMovement" xmlrpc="false">
-            <label>Test Movement</label>
-            <description>Test movement method.</description>
-            <param name="target" type="const RobotPose">
-                <label>Target</label>
-            </param>
-        </method>
     </class>
 </bundle>

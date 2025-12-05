@@ -36,8 +36,6 @@ namespace aergo
         // only acts as a server, no instance code needed
         virtual int onBind() { return 0; }   
         virtual int onUnbind() { return 0; }
-        
-        CBUN_PCALL testMovement(const kr2_program_api::RobotPose &target);
 
         virtual CBUN_PCALL onActivate(const boost::property_tree::ptree &param_tree);
         virtual CBUN_PCALL onDeactivate();

@@ -18,8 +18,6 @@ int AergoConnector::onDestroy() { return impl_->onDestroy(); }
 int AergoConnector::onBind() { return impl_->onBind(); }
 int AergoConnector::onUnbind() { return impl_->onUnbind(); }
 
-CBUN_PCALL AergoConnector::testMovement(const kr2_program_api::RobotPose &target) { return impl_->testMovement(target); }
-
 CBUN_PCALL AergoConnector::onActivate(const boost::property_tree::ptree &param_tree) { return impl_->onActivate(param_tree); }
 CBUN_PCALL AergoConnector::onDeactivate() { return impl_->onDeactivate(); }
 CBUN_PCALL AergoConnector::onMount(const boost::property_tree::ptree &param_tree) { return impl_->onMount(param_tree); }

@@ -174,38 +174,6 @@ bool AergoConnector::Impl::processActivationParams(const boost::property_tree::p
 }
 
 
-CBUN_PCALL AergoConnector::Impl::testMovement(const kr2_program_api::RobotPose &target)
-{
-    double r, p, y;
-    target.rot().getRPY(r, p, y);
-    const auto& pos = target.pos();
-
-    kr2rc_api2::Pose target_pose { 
-        .frame_ = {
-            .M_ = kr2rc_api2::Rotation::RPY(r, p, y),
-            .p_ = kr2rc_api2::Vector(pos.x().d(), pos.y().d(), pos.z().d())
-        },
-        .ref_frame_id_ = 0 
-    };
-
-    auto request = kr2rc_api2::Move::workSpaceBlend()
-        .toTarget(target_pose)
-        .withTargetType(kr2rc_api2::Move::TargetType::eStopPoint)
-        .withTargetSpeed(0.400)
-        .withBlendMaxAcceleration(8.000)
-        .withSynchronization(kr2rc_api2::Move::SYNC);
-
-
-    LOG_INFO("Starting movement to target pose...");
-    request.follow();
-    LOG_INFO("Movement finished.");
-
-
-    // No hardware to move, so just return OK
-    CBUN_PCALL_RET_OK
-}
-
-
 int64_t AergoConnector::Impl::micros() const noexcept
 {
     using namespace std::chrono;
@@ -256,6 +224,26 @@ void AergoConnector::Impl::processRequest(const rpc::RpcServer::IncomingRequest&
     }
 
     rpc_server_->sendResponse(request.request_id, response, Span<const std::byte>(response_blob_buffer_.data(), response_blob_buffer_.size()));    
+}
+
+
+const char* parseCmdResult(const kr2rc_api2::CmdResult& res)
+{
+    switch (res.err_code_)
+    {
+        case kr2rc_api2::Move::CmdResultCodes::eAccepted:
+            return "Move request was passed to the robot controller.";
+        case kr2rc_api2::Move::CmdResultCodes::eInvalidVariables:
+            return "A parameter in the move request has an invalid value, e.g., a Pose containing NANs.";
+        case kr2rc_api2::Move::CmdResultCodes::eMissingParameters:
+            return "An obligatory parameter was not set in the move request.";
+        case kr2rc_api2::Move::CmdResultCodes::eConflictingParameters:
+            return "Mutually exclusive parameters were detected in the move request.";
+        case kr2rc_api2::Move::CmdResultCodes::eUnknownError:
+        default:
+            return "An unknown error occurred while processing the move request.";
+        
+    }
 }
 
 
@@ -315,9 +303,11 @@ ri::Response AergoConnector::Impl::processRequestRobotControl(
             };
         }
 
-        auto start_us = micros();
-        kr2rc_api2::Move::terminate().now(); // immediately stop the robot and clear its trajectory
-        LOG_INFO("RobotControl CancelMovement processed in " << (micros() - start_us) << " us.");
+        kr2rc_api2::CmdResult res = kr2rc_api2::Move::terminate().now(); // immediately stop the robot and clear its trajectory
+        if (res.err_code_ != kr2rc_api2::Move::CmdResultCodes::eAccepted)
+        {
+            return errorResponse(out_response_blob, parseCmdResult(res));
+        }
 
         return Response {
             .resp_type = RespType::SUCCESS,
@@ -412,13 +402,18 @@ ri::Response AergoConnector::Impl::processMoveJoint(
 
     finishCurrentMoveAction(false, "Move was interrupted by a new move request.");
 
-    kr2rc_api2::Move::jointSpaceBlend()
+    kr2rc_api2::CmdResult res = kr2rc_api2::Move::jointSpaceBlend()
         .toTarget(kr2rc_api2::JSVector(move_joint_request.joint_targets.data()))
         .withTargetType(kr2rc_api2::Move::TargetType::eStopPoint)
         .withTargetSpeed(move_joint_request.speed)
         .withBlendMaxAcceleration(move_joint_request.acceleration)
         .withSynchronization(kr2rc_api2::Move::ASYNC)
         .follow();
+
+    if (res.err_code_ != kr2rc_api2::Move::CmdResultCodes::eAccepted)
+    {
+        return errorResponse(out_response_blob, parseCmdResult(res));
+    }
 
     current_move_action_id_ = generateNextActionId();
     current_move_start_time_us_ = micros();
@@ -467,13 +462,18 @@ ri::Response AergoConnector::Impl::processMoveLinear(
 
     finishCurrentMoveAction(false, "Move was interrupted by a new move request.");
 
-    kr2rc_api2::Move::workSpaceBlend()
+    kr2rc_api2::CmdResult res = kr2rc_api2::Move::workSpaceBlend()
         .toTarget(kr2PoseFromRcPose(move_linear_request.pose_target))
         .withTargetType(kr2rc_api2::Move::TargetType::eStopPoint)
         .withTargetSpeed(move_linear_request.speed)
         .withBlendMaxAcceleration(move_linear_request.acceleration)
         .withSynchronization(kr2rc_api2::Move::ASYNC)
         .follow();
+
+    if (res.err_code_ != kr2rc_api2::Move::CmdResultCodes::eAccepted)
+    {
+        return errorResponse(out_response_blob, parseCmdResult(res));
+    }
 
     current_move_action_id_ = generateNextActionId();
     current_move_start_time_us_ = micros();
@@ -526,7 +526,12 @@ ri::Response AergoConnector::Impl::processMoveArc(
         arc_req = arc_req.asCircle(move_arc_request.circle_percentage * 2.0 * 3.14159265358979323846);
     }
     
-    arc_req.follow();
+    kr2rc_api2::CmdResult res = arc_req.follow();
+    
+    if (res.err_code_ != kr2rc_api2::Move::CmdResultCodes::eAccepted)
+    {
+        return errorResponse(out_response_blob, parseCmdResult(res));
+    }
 
     current_move_action_id_ = generateNextActionId();
     current_move_start_time_us_ = micros();
@@ -581,13 +586,19 @@ ri::Response AergoConnector::Impl::processMoveTrajectory(
             spline_move = spline_move.withTargetType(kr2rc_api2::Move::TargetType::eViaPoint);
         }
 
+        kr2rc_api2::CmdResult res;
         if (i == 0)
         {
-            spline_move.follow();
+            res = spline_move.follow();
         }
         else
         {
-            spline_move.add();
+            res = spline_move.add();
+        }
+
+        if (res.err_code_ != kr2rc_api2::Move::CmdResultCodes::eAccepted)
+        {
+            return errorResponse(out_response_blob, parseCmdResult(res));
         }
     }
 

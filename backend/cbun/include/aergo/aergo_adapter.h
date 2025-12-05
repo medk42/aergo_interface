@@ -17,8 +17,6 @@ namespace aergo {
         virtual int onDestroy();
         virtual int onBind();
         virtual int onUnbind();
-        
-        CBUN_PCALL testMovement(const kr2_program_api::RobotPose &target);
 
     protected:
         virtual CBUN_PCALL onActivate(const boost::property_tree::ptree &param_tree);
