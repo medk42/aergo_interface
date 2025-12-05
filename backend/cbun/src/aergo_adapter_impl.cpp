@@ -519,6 +519,8 @@ ri::Response AergoConnector::Impl::processMoveArc(
                 kr2rc_api2::Move::TrajectoryArcRequest::Orientation::eFixed : 
                 kr2rc_api2::Move::TrajectoryArcRequest::Orientation::eTangential
         )
+        .withBlendRatio(0.2)
+        .withSplineHorizon(4)
         .withSynchronization(kr2rc_api2::Move::ASYNC);
     
     if (move_arc_request.as_circle)
@@ -571,6 +573,7 @@ ri::Response AergoConnector::Impl::processMoveTrajectory(
             .withApproximateSpeed(move_trajectory_request.speed)
             .withAcceleration(move_trajectory_request.acceleration)
             .withSynchronization(kr2rc_api2::Move::ASYNC)
+            .withSplineHorizon(4)
             .withOrientation(
                 move_trajectory_request.orientation_type == OrientationType::FIXED ? 
                     kr2rc_api2::Move::TrajectorySplineRequest::Orientation::eFixed : 
