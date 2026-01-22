@@ -28,7 +28,7 @@ namespace aergo
     public:
         
         Impl(AergoConnector* base) : base_(base) {}
-        ~Impl() = default;
+        ~Impl();
 
         virtual int onCreate();
         virtual int onDestroy();
@@ -48,6 +48,8 @@ namespace aergo
         bool processActivationParams(const boost::property_tree::ptree &tree);
 
         int64_t micros() const noexcept;
+
+        void stopTrajectoryWorker();
 
         void rpcServerThreadFunc();
         uint64_t generateNextActionId() { return next_action_id_++; }
@@ -91,6 +93,9 @@ namespace aergo
         std::thread rpc_server_thread_;
         std::atomic<bool> rpc_server_running_{false};
 
+        std::thread trajectory_thread_;
+        std::atomic<bool> trajectory_stop_requested_{false};
+
         std::vector<std::byte> response_blob_buffer_;
 
         uint64_t next_action_id_{1};
@@ -102,5 +107,8 @@ namespace aergo
         struct {
             u_int16_t server_port;
         } activation_parameters_;
+
+        uint32_t last_safety_flags_{0};
+        uint32_t last_motion_flags_cleared_{0};
     };
 }

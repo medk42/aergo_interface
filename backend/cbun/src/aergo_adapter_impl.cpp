@@ -79,6 +79,12 @@ void CbunLogger::log(rpc::RpcLogType type, const char* message) const noexcept
 }
 
 
+AergoConnector::Impl::~Impl()
+{
+    stopTrajectoryWorker();
+}
+
+
 int AergoConnector::Impl::onCreate()
 {
 
@@ -136,6 +142,8 @@ CBUN_PCALL AergoConnector::Impl::onActivate(const boost::property_tree::ptree &p
 
 CBUN_PCALL AergoConnector::Impl::onDeactivate()
 {
+    stopTrajectoryWorker();
+
     rpc_server_running_ = false;
     if (rpc_server_thread_.joinable())
     {
@@ -178,6 +186,16 @@ int64_t AergoConnector::Impl::micros() const noexcept
 {
     using namespace std::chrono;
     return duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count();
+}
+
+
+void AergoConnector::Impl::stopTrajectoryWorker()
+{
+    trajectory_stop_requested_.store(true);
+    if (trajectory_thread_.joinable())
+    {
+        trajectory_thread_.join();
+    }
 }
 
 
@@ -302,6 +320,8 @@ ri::Response AergoConnector::Impl::processRequestRobotControl(
                 .action_id = action_id
             };
         }
+
+        stopTrajectoryWorker();
 
         kr2rc_api2::CmdResult res = kr2rc_api2::Move::terminate().now(); // immediately stop the robot and clear its trajectory
         if (res.err_code_ != kr2rc_api2::Move::CmdResultCodes::eAccepted)
@@ -566,44 +586,65 @@ ri::Response AergoConnector::Impl::processMoveTrajectory(
 
     finishCurrentMoveAction(false, "Move was interrupted by a new move request.");
 
-    for (size_t i = 0; i < move_trajectory_request.pose_targets.size(); ++i)
+    auto first_move = kr2rc_api2::Move::spline()
+        .withKnotPoint(kr2PoseFromRcPose(move_trajectory_request.pose_targets[0]))
+        .withApproximateSpeed(move_trajectory_request.speed)
+        .withAcceleration(move_trajectory_request.acceleration)
+        .withSynchronization(kr2rc_api2::Move::ASYNC)
+        .withSplineHorizon(4)
+        .withOrientation(
+            move_trajectory_request.orientation_type == OrientationType::FIXED ? 
+                kr2rc_api2::Move::TrajectorySplineRequest::Orientation::eFixed : 
+                kr2rc_api2::Move::TrajectorySplineRequest::Orientation::eTangentialSecondaryZ
+        )
+        .withTargetType(kr2rc_api2::Move::TargetType::eViaPoint);
+
+    kr2rc_api2::CmdResult res = first_move.follow();
+    if (res.err_code_ != kr2rc_api2::Move::CmdResultCodes::eAccepted)
     {
-        auto spline_move = kr2rc_api2::Move::spline()
-            .withKnotPoint(kr2PoseFromRcPose(move_trajectory_request.pose_targets[i]))
-            .withApproximateSpeed(move_trajectory_request.speed)
-            .withAcceleration(move_trajectory_request.acceleration)
-            .withSynchronization(kr2rc_api2::Move::ASYNC)
-            .withSplineHorizon(4)
-            .withOrientation(
-                move_trajectory_request.orientation_type == OrientationType::FIXED ? 
-                    kr2rc_api2::Move::TrajectorySplineRequest::Orientation::eFixed : 
-                    kr2rc_api2::Move::TrajectorySplineRequest::Orientation::eTangentialSecondaryZ
-            );
-        
-        if (i == move_trajectory_request.pose_targets.size() - 1)
-        {
-            spline_move = spline_move.withTargetType(kr2rc_api2::Move::TargetType::eStopPoint);
-        }
-        else
-        {
-            spline_move = spline_move.withTargetType(kr2rc_api2::Move::TargetType::eViaPoint);
-        }
-
-        kr2rc_api2::CmdResult res;
-        if (i == 0)
-        {
-            res = spline_move.follow();
-        }
-        else
-        {
-            res = spline_move.add();
-        }
-
-        if (res.err_code_ != kr2rc_api2::Move::CmdResultCodes::eAccepted)
-        {
-            return errorResponse(out_response_blob, parseCmdResult(res));
-        }
+        return errorResponse(out_response_blob, parseCmdResult(res));
     }
+
+    const auto request_copy = move_trajectory_request;
+    trajectory_stop_requested_.store(false);
+
+    trajectory_thread_ = std::thread([this, request_copy]() {
+        for (size_t i = 1; i < request_copy.pose_targets.size(); ++i)
+        {
+            if (trajectory_stop_requested_.load())
+            {
+                break;
+            }
+
+            auto spline_move = kr2rc_api2::Move::spline()
+                .withKnotPoint(kr2PoseFromRcPose(request_copy.pose_targets[i]))
+                .withApproximateSpeed(request_copy.speed)
+                .withAcceleration(request_copy.acceleration)
+                .withSynchronization(kr2rc_api2::Move::ASYNC)
+                .withSplineHorizon(4)
+                .withOrientation(
+                    request_copy.orientation_type == OrientationType::FIXED ? 
+                        kr2rc_api2::Move::TrajectorySplineRequest::Orientation::eFixed : 
+                        kr2rc_api2::Move::TrajectorySplineRequest::Orientation::eTangentialSecondaryZ
+                );
+
+            if (i == request_copy.pose_targets.size() - 1)
+            {
+                spline_move = spline_move.withTargetType(kr2rc_api2::Move::TargetType::eStopPoint);
+            }
+            else
+            {
+                spline_move = spline_move.withTargetType(kr2rc_api2::Move::TargetType::eViaPoint);
+            }
+
+            kr2rc_api2::CmdResult add_res = spline_move.add();
+            if (add_res.err_code_ != kr2rc_api2::Move::CmdResultCodes::eAccepted)
+            {
+                LOG_WARN("Failed to enqueue trajectory point " << (i + 1) << " / " << request_copy.pose_targets.size());
+                break;
+            }
+        }
+    });
 
     current_move_action_id_ = generateNextActionId();
     current_move_start_time_us_ = micros();
@@ -617,6 +658,8 @@ ri::Response AergoConnector::Impl::processMoveTrajectory(
 
 void AergoConnector::Impl::finishCurrentMoveAction(bool success, const char* error_message)
 {
+    stopTrajectoryWorker();
+
     if (current_move_action_id_)
     {
         if (error_message)
@@ -722,13 +765,19 @@ std::tuple<ri::robot_control::RobotStatus, const char*> AergoConnector::Impl::re
     {
         current_status = RobotStatus::ERROR;
         error_message = "Safety flags are engaged (PSTOP, ESTOP).";
-        LOG_WARN("Robot in ERROR state due to safety flags: " << safety_flags);
+        if (last_safety_flags_ != safety_flags)
+        {
+            LOG_WARN("Robot in ERROR state due to safety flags: " << safety_flags);
+        }
     }
     else if (motion_flags_cleared != 0)
     {
         current_status = RobotStatus::ERROR;
         error_message = "Motion flags indicate an unexpected state (not IDLE or MOVING).";
-        LOG_WARN("Robot in ERROR state due to unexpected motion flags: " << motion_flags);
+        if (last_motion_flags_cleared_ != motion_flags_cleared)
+        {
+            LOG_WARN("Robot in ERROR state due to unexpected motion flags: " << motion_flags);
+        }
     }
     else if (is_tracking)
     {
@@ -744,6 +793,8 @@ std::tuple<ri::robot_control::RobotStatus, const char*> AergoConnector::Impl::re
         error_message = "Unknown motion state.";
     }
 
+    last_safety_flags_ = safety_flags;
+    last_motion_flags_cleared_ = motion_flags_cleared;
 
     return { current_status, error_message };
 }
